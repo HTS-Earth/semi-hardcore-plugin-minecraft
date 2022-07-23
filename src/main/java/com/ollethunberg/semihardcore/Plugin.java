@@ -7,9 +7,11 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.logging.Logger;
 
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.postgresql.Driver;
@@ -18,16 +20,22 @@ public class Plugin extends JavaPlugin implements Listener {
   private static final Logger LOGGER = Logger.getLogger("semi-hardcore");
   Connection connection;
   SQLHelper sqlHelper;
+  FileConfiguration config;
 
   public void onEnable() {
     loadConfig();
     LOGGER.info("semi-hardcore enabled");
+    LOGGER.info("jdbc:postgresql://" + config.getString("database.ip") + ":" + config.getInt("database.port") + "/"
+        + config.getString("database.database") + "?stringtype=unspecified");
     try {
       DriverManager.registerDriver(new Driver());
       connection = DriverManager.getConnection(
-          "jdbc:postgresql://localhost:5432/nationsplus?stringtype=unspecified", "postgres", "");
+          "jdbc:postgresql://" + config.getString("database.ip") + ":" + config.getInt("database.port") + "/"
+              + config.getString("database.database") + "?stringtype=unspecified",
+          config.getString("database.username"), config.getString("database.password"));
       sqlHelper = new SQLHelper(connection);
       getServer().getPluginManager().registerEvents(this, this);
+
     } catch (SQLException e) {
       LOGGER.severe("Could not connect to database");
       e.printStackTrace();
@@ -49,7 +57,7 @@ public class Plugin extends JavaPlugin implements Listener {
     }
   }
 
-  @EventHandler(priority = EventPriority.LOWEST)
+  @EventHandler(priority = EventPriority.LOW)
   public void onPlayerJoin(PlayerJoinEvent event) {
     String isPlayerInDatabaseSQL = "SELECT EXISTS ( SELECT FROM player WHERE uid = ? );";
     try {
@@ -64,6 +72,7 @@ public class Plugin extends JavaPlugin implements Listener {
           event.getPlayer()
               .kickPlayer(getBanReasonMessage(rsPlayerBannedUntil.getString("ban_reason"),
                   rsPlayerBannedUntil.getTimestamp("banned_until")));
+
         }
       } else {
         // NationsPlus plugin takes care of inserting new players to the database.
@@ -72,6 +81,42 @@ public class Plugin extends JavaPlugin implements Listener {
 
     } catch (SQLException e) {
       LOGGER.info("Could not check if player is in database");
+      e.printStackTrace();
+    }
+  }
+
+  // event handler when player dies
+  @EventHandler
+  public void onPlayerDeath(PlayerDeathEvent event) {
+    // get the player who died
+    String victimUid = event.getEntity().getPlayer().getUniqueId().toString();
+    // get the player who killed the player
+    String killerUid = "";
+    if (event.getEntity().getKiller() != null) {
+      killerUid = event.getEntity().getKiller().getUniqueId().toString();
+    }
+
+    // Add the stats to the victim and the killer
+    String addDeathToVictimSQL = "UPDATE player SET deaths = deaths + 1 WHERE uid = ?;";
+    String addDeathToKillerSQL = "UPDATE player SET kills = kills + 1 WHERE uid = ?;";
+    try {
+      sqlHelper.update(addDeathToVictimSQL, victimUid);
+      if (!killerUid.equals("")) { // Sometimes, the killer can be null, for example if they are killed by /kill
+                                   // command
+        sqlHelper.update(addDeathToKillerSQL, killerUid);
+      }
+    } catch (SQLException e) {
+      e.printStackTrace();
+    }
+    // Ban the victim for 48 hours for death
+    String banVictimSQL = "INSERT INTO player_bans (player_id, banned_date, banned_minutes, ban_reason) VALUES (?, ?, ?, ?);";
+    try {
+      sqlHelper.update(banVictimSQL, victimUid, new Timestamp(new java.util.Date().getTime()),
+          config.getInt("deathban.duration") * 60, "death");
+      // Kick player
+      event.getEntity().getPlayer().kickPlayer(getBanReasonMessage("death",
+          new Timestamp(new java.util.Date().getTime() + (config.getInt("deathban.duration") * 60 * 60 * 1000))));
+    } catch (SQLException e) {
       e.printStackTrace();
     }
   }
@@ -88,5 +133,6 @@ public class Plugin extends JavaPlugin implements Listener {
   public void loadConfig() {
     getConfig().options().copyDefaults(true);
     saveConfig();
+    config = getConfig();
   }
 }
