@@ -1,0 +1,5 @@
+name: semi-hardcore
+main: com.ollethunberg.semihardcore.Plugin
+version: 0.0.1
+api-version: 1.19
+authors: [OlleThunberg]
