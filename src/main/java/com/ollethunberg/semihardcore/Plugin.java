@@ -7,7 +7,10 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.logging.Logger;
 
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -40,6 +43,62 @@ public class Plugin extends JavaPlugin implements Listener {
       LOGGER.severe("Could not connect to database");
       e.printStackTrace();
     }
+  }
+
+  // Command handler
+  public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
+    if (sender instanceof Player) {
+      Player player = (Player) sender;
+      if (cmd.getName().equalsIgnoreCase("deaths")) {
+        try {
+          ResultSet rs = sqlHelper.query("SELECT * FROM player_bans WHERE player_id = ?",
+              player.getUniqueId().toString());
+          int deaths = 0;
+          while (rs.next()) {
+            deaths++;
+          }
+          player.sendMessage("You have died " + deaths + " times");
+          return true;
+        } catch (SQLException e) {
+          e.printStackTrace();
+        }
+      } else if (cmd.getName().equalsIgnoreCase("semihardcore")) {
+        // check if the sender has the permission
+        if (sender.hasPermission("semihardcore.admin")) {
+          if (args.length == 0) {
+            sender.sendMessage("Usage: /semihardcore <reload | unban>");
+            return true;
+          }
+
+          if (args[0].equalsIgnoreCase("reload")) {
+            loadConfig();
+            sender.sendMessage("Config reloaded");
+            return true;
+          } else if (args[0].equalsIgnoreCase("unban")) {
+            if (args.length == 1) {
+              sender.sendMessage("Usage: /semihardcore unban <player>");
+              return true;
+            }
+            try {
+              // delete from player_bans, only delete the latest ban
+              sqlHelper.update(
+                  "DELETE FROM player_bans WHERE id = (select pb.id from player_bans as pb inner join player as p on p.uid=pb.player_id where LOWER(p.player_name) = LOWER(?) ORDER BY pb.banned_date DESC LIMIT 1)",
+                  args[1]);
+              sender.sendMessage("§aPlayer unbanned: " + args[1]);
+              return true;
+            } catch (SQLException e) {
+              sender.sendMessage("§cThere was an error unbanning the player");
+              e.printStackTrace();
+            }
+          }
+
+        }
+      }
+    } else {
+      sender.sendMessage("You must be a player to use this command");
+    }
+    return true;
+
   }
 
   public String getBanReasonMessage(String reason, Timestamp bannedUntil) {
