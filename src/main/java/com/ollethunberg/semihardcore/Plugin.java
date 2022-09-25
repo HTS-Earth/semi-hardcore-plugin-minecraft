@@ -46,7 +46,7 @@ public class Plugin extends JavaPlugin implements Listener {
     switch (reason) {
       case "death":
         return "§c§lYou are dead\n§cThis is a semi-hardcore server which means that you will be temporary banned from the server until you are revived.\n§aYou will be revived at "
-            + bannedUntil.toString() + "\n§l§6Don't want to wait? Visit §a§l§n§oshop.peepo.gg/revive";
+            + bannedUntil.toString() + "\n§l§6Don't want to wait? Visit §a§l§n§ofedcraft.com/shop";
       case "cheat":
         return "You have been banned from the server for cheating.";
       case "spam":
@@ -101,6 +101,8 @@ public class Plugin extends JavaPlugin implements Listener {
     String addDeathToKillerSQL = "UPDATE player SET kills = kills + 1 WHERE uid = ?;";
     try {
       sqlHelper.update(addDeathToVictimSQL, victimUid);
+      String updateBalanceSQL = "UPDATE player SET balance = 0 WHERE uid = ?;";
+      sqlHelper.update(updateBalanceSQL, victimUid);
       if (!killerUid.equals("")) { // Sometimes, the killer can be null, for example if they are killed by /kill
                                    // command
         sqlHelper.update(addDeathToKillerSQL, killerUid);
