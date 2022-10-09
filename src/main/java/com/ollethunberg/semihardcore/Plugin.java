@@ -15,7 +15,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerLoginEvent;
+import org.bukkit.event.player.PlayerLoginEvent.Result;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.postgresql.Driver;
 
@@ -117,7 +118,7 @@ public class Plugin extends JavaPlugin implements Listener {
   }
 
   @EventHandler(priority = EventPriority.LOW)
-  public void onPlayerJoin(PlayerJoinEvent event) {
+  public void onPlayerJoin(PlayerLoginEvent event) {
     String isPlayerInDatabaseSQL = "SELECT EXISTS ( SELECT FROM player WHERE uid = ? );";
     try {
       ResultSet rs = sqlHelper.query(isPlayerInDatabaseSQL, event.getPlayer().getUniqueId().toString());
@@ -125,13 +126,14 @@ public class Plugin extends JavaPlugin implements Listener {
         LOGGER.info("Player " + event.getPlayer().getName() + " is in database: " + rs.getBoolean(1));
         String playerBannedUntil = "SELECT banned_date + (banned_minutes * interval '1 minute') as banned_until, player_id, ban_reason FROM player_bans WHERE player_id = ? order by banned_date DESC;";
         ResultSet rsPlayerBannedUntil = sqlHelper.query(playerBannedUntil, event.getPlayer().getUniqueId().toString());
-        rsPlayerBannedUntil.next();
+        if (!rsPlayerBannedUntil.next()) {
+          return;
+        }
         if (rsPlayerBannedUntil.getTimestamp("banned_until").after(new java.util.Date())) {
 
-          event.getPlayer()
-              .kickPlayer(getBanReasonMessage(rsPlayerBannedUntil.getString("ban_reason"),
-                  rsPlayerBannedUntil.getTimestamp("banned_until")));
-
+          event.setKickMessage(getBanReasonMessage(rsPlayerBannedUntil.getString("ban_reason"),
+              rsPlayerBannedUntil.getTimestamp("banned_until")));
+          event.setResult(Result.KICK_BANNED);
         }
       } else {
         // NationsPlus plugin takes care of inserting new players to the database.
