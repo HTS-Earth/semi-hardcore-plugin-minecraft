@@ -158,7 +158,7 @@ public class Plugin extends JavaPlugin implements Listener {
     }
 
     // Add the stats to the victim and the killer
-    String addDeathToVictimSQL = "UPDATE player SET deaths = deaths + 1 WHERE uid = ?;";
+    String addDeathToVictimSQL = "UPDATE player SET deaths = deaths + 1, balance=0 WHERE uid = ?;";
     String addDeathToKillerSQL = "UPDATE player SET kills = kills + 1 WHERE uid = ?;";
     try {
       sqlHelper.update(addDeathToVictimSQL, victimUid);
